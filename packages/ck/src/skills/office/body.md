@@ -146,6 +146,9 @@ try:
             m = re.match(r"^(?:Heading|見出し)\s*(\d+)$", style)
             if m:
                 print(f"\n{'#' * int(m.group(1))} {block.text}")
+            elif style in ("Title", "表題"):
+                # 文書タイトル（Title / 表題スタイル）は最上位見出しとして出力し、構造を残す
+                print(f"\n# {block.text}")
             else:
                 print(block.text)
 except Exception as e:
