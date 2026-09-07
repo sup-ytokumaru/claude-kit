@@ -65,8 +65,8 @@ plugins/ck/    — Claude Code プラグインスタブ
 主系列: `/kickoff → /discuss → /plan → /implement → /qa（任意） → /test → /review → /commit → /pr → /handoff`。次のセッションは `/resume` で復帰する。
 `/qa` は `/test` の前段（台帳を設計してからコード化する）。`/implement` の出口で必ず提案され、台帳が要らない規模なら飛ばして `/test` へ進む。
 
-補助（主系列のどこからでも）: `/debug`（不具合調査）・`/refactor`（挙動不変の構造改善）・`/review-others`（他者コードの監査）・`/git-issue-plan`（Issue 起点の着手）・`/git-issue-create`（フォローアップの起票）・`/ck-todo`（判断待ちの論点を積む）・`/ck-note`（調査中の気づき）・`/doc-this`（恒久ドキュメント化）・`/help`（プロジェクト固有の質問）。
-仕様書系: `/office → /spec-import → /qa`。移行系: `/qa`（移行モード）→ `/migrate-verify`。新規リポジトリ: `/new-project`（`/kickoff` が Greenfield 判定で誘導）。
+補助（主系列のどこからでも）: `/debug`（不具合調査）・`/refactor`（挙動不変の構造改善）・`/review-others`（他者コードの監査）・`/git-issue-plan`（Issue 起点の着手）・`/git-issue-create`（フォローアップの起票）・`/ck-todo`（判断待ちの論点を積む）・`/ck-todo-list`（TODO の確認・消化）・`/ck-note`（調査中の気づき）・`/doc-this`（恒久ドキュメント化）・`/help`（プロジェクト固有の質問）。
+UI: `/test` の後段で `/playwright-mcp-e2e`（E2E テストの作成。qa 台帳のケースID をテスト名に埋め込む）。仕様書系: `/office → /spec-import → /qa`。移行系: `/qa`（移行モード）→ `/migrate-verify`。新規リポジトリ: `/new-project`（`/kickoff` が Greenfield 判定で誘導）。
 
 各スキルの成果物の保存先は後述「ノート・TODOのストレージ」を正本とする。
 
