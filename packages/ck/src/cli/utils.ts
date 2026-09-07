@@ -20,7 +20,9 @@ export function toSlug(text: string): string {
     .replace(/[^\w\s-]/g, '')
     .replace(/\s+/g, '-')
     .slice(0, 40)
-    .replace(/-+$/, '');
+    // 日本語除去で生じる連続ハイフンを畳み、先頭・末尾のハイフンを除く（`--r1` のような退化を防ぐ）
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
   // 日本語等でASCII部分が空になる場合はミリ秒タイムスタンプで補完（衝突回避）
   if (!ascii) {
     return Date.now().toString();

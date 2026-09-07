@@ -104,6 +104,13 @@ describe('ck todo done', () => {
     expect(content).toMatch(/completed: \d{4}-\d{2}-\d{2}/);
   });
 
+  test('ファイル名で引けない日本語 TODO は本文タイトルの部分一致で完了にできる', () => {
+    const created = runTodo(['割引率上限のエラーメッセージ文言を決める']).stdout;
+    const { exitCode } = runTodo(['done', '割引率上限']);
+    expect(exitCode).toBe(0);
+    expect(readFileSync(created, 'utf-8')).toContain('status: done');
+  });
+
   test('一致しない名前はエラー終了する', () => {
     const { exitCode } = runTodo(['done', 'no-such-todo']);
     expect(exitCode).toBe(1);

@@ -30,6 +30,11 @@ describe('toSlug', () => {
   test('末尾のハイフンを除去する', () => {
     expect(toSlug('hello world-')).not.toMatch(/-$/);
   });
+
+  test('日本語混在で生じる先頭・連続ハイフンを畳む', () => {
+    expect(toSlug('割引計算は四捨五入。仕様 R1 参照')).toBe('r1');
+    expect(toSlug('テスト  --  hello   world')).toBe('hello-world');
+  });
 });
 
 describe('uniqueFilepath', () => {
