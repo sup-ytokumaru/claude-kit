@@ -26,7 +26,7 @@ Claude Code をもっと使いやすくする、個人用プラグインセッ�
 ### 手順
 
 ```bash
-# 1. リポジトリを取得
+# 1. リポジトリを取得（フォークして使う場合はフォーク先の URL を指定）
 git clone <このリポジトリの URL> claude-kit
 cd claude-kit
 
@@ -54,10 +54,11 @@ ck setup
 主要スキルは、実際の開発サイクルに沿って並んでいます。
 
 ```
-/kickoff → /discuss → /plan → /implement → /test → /qa → /review → /commit → /pr → /handoff
+/kickoff → /discuss → /plan → /implement → /qa → /test → /review → /commit → /pr → /handoff
    ↑                                                                                   │
    └─────────────────────── /resume（次のセッションで再開）───────────────────────────┘
 
+  /new-project … 新規リポジトリの立ち上げ（CLAUDE.md・用語集の整備。/kickoff が Greenfield 判定で誘導）
   /debug … バグ・テスト失敗の調査（フロー中いつでも）
   /refactor … 挙動を変えない構造改善（単独起動。機能追加・バグ修正と混ぜない）
   /review-others … 他者のコードをレビュワーとして監査（別立場）
@@ -72,8 +73,8 @@ ck setup
 | 実装 | `/implement` | 確定した計画を実装する（テスト後置き既定） |
 | 改善 | `/refactor` | 挙動を変えずにコード構造を改善する（1変形=1検証） |
 | 調査 | `/debug` | バグ・エラー・テスト失敗の根本原因を体系的に特定 |
-| テスト | `/test` | 実装完了後にユニットテストを作成する |
-| QA | `/qa` | L1〜L8 の検証レンズでテストケース・QA 観点を洗い出す |
+| QA | `/qa` | L1〜L8 の検証レンズでテストケース・QA 観点を洗い出す（`/test` の前段または並走） |
+| テスト | `/test` | 実装完了後にユニットテストを作成する（`/qa` の台帳があればコード化） |
 | 移行 | `/migrate-verify` | 旧新データの突合（件数・キー・値・形式）を読み取り専用で機械実行 |
 | E2E | `/playwright-mcp-e2e` | UI の E2E テストを作成する |
 | レビュー | `/review` | 自分の差分を PR 前に自己レビュー（型・Lint・品質・整合性） |
@@ -104,13 +105,14 @@ ck setup
 | 種別 | 保存先 | 書き込むスキル |
 |------|--------|----------------|
 | 設計判断 | `decisions/<日付>-<slug>.md` | `/discuss`・`/plan` |
+| 実装プラン | `plans/<日付>-<slug>.md` | `/plan`（`/implement` が進捗マーカーを更新） |
 | QA テストケース台帳 | `tests/qa/<機能名>.md`（横断 index は `tests/qa/README.md`） | `/qa` |
 | 他者コードのレビュー結果 | `reviews/<日付>-<slug>.md` | `/review-others` |
 | 取込済み仕様 | `specs/<機能名>.md`（index は `specs/README.md`） | `/spec-import` |
 | 移行突合レポート | `tests/qa/recon/<日付>-<機能名>.md` | `/migrate-verify` |
 | 引き継ぎ | `.claude/works/handoffs/` | `/handoff` |
 
-> `.notes/`・`decisions/`・`reviews/`・`tests/qa/`・`specs/` は git 管理（共有）されます。実在の顧客名・案件名・認証情報は書き込まないでください（各スキルが検知時に伏字化を提案します）。
+> `.notes/`・`decisions/`・`plans/`・`reviews/`・`tests/qa/`・`specs/`・`.claude/docs/` は git 管理（共有）されます。実在の顧客名・案件名・認証情報は書き込まないでください（各スキルが検知時に伏字化を提案します）。
 
 ---
 
