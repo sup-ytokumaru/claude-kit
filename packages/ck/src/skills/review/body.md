@@ -74,7 +74,7 @@ fi
 
 **decisions 整合性:**
 - [ ] プロジェクトの CLAUDE.md に「判断レンズ」節（設計判断で常に当てる観点の一覧）があれば、その観点を差分に当てる（`/discuss`・`/plan` と同じ節を参照する。無ければスキップ）
-- [ ] ブランチスラグに一致する `decisions/` ファイルがある場合、`## Decision` の制約に実装が従っているか（却下された代替案を採用していないか）。照合は、ブランチ名から型プレフィックス（`feat/`・`fix/` 等）を除いた部分を slug とみなし、`decisions/<date>-<slug>.md` の日付を無視して slug 部分と突き合わせる（例: `fix/login-timeout` → `decisions/*-login-timeout.md`）。**ブランチ名から slug が取れない場合（デフォルトブランチ上・ブランチ名が汎用的）は、`plans/` の最新ファイルの slug をフォールバックとして使う**（kickoff / discuss / plan はタスク由来の slug で decisions/・plans/ を作るため、ブランチ名と一致しないことがある）
+- [ ] ブランチスラグに一致する `decisions/` ファイルがある場合、`## Decision` の制約に実装が従っているか（却下された代替案を採用していないか）。照合は、ブランチ名から型プレフィックス（`feat/`・`fix/` 等）を除いた部分を slug とみなし、`decisions/<date>-<slug>.md` の日付を無視して slug 部分と突き合わせる（例: `fix/login-timeout` → `decisions/*-login-timeout.md`）。**ブランチ名から slug が取れない場合（デフォルトブランチ上・ブランチ名が汎用的）、または取れても一致する decisions/ ファイルが無い場合は、`plans/` の最新ファイルの slug をフォールバックとして使う**（`/pr` と同じ照合規則）（kickoff / discuss / plan はタスク由来の slug で decisions/・plans/ を作るため、ブランチ名と一致しないことがある）
 
 ## Step 2.5: QA台帳の回帰トリガー突合
 
