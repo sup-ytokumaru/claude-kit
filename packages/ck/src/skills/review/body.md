@@ -68,6 +68,7 @@ git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
 - [ ] リトライ・再実行で冪等か。コミット境界・ロック粒度は適切か
 
 **decisions 整合性:**
+- [ ] プロジェクトの CLAUDE.md に「判断レンズ」節（設計判断で常に当てる観点の一覧）があれば、その観点を差分に当てる（`/discuss`・`/plan` と同じ節を参照する。無ければスキップ）
 - [ ] ブランチスラグに一致する `decisions/` ファイルがある場合、`## Decision` の制約に実装が従っているか（却下された代替案を採用していないか）。照合は、ブランチ名から型プレフィックス（`feat/`・`fix/` 等）を除いた部分を slug とみなし、`decisions/<date>-<slug>.md` の日付を無視して slug 部分と突き合わせる（例: `fix/login-timeout` → `decisions/*-login-timeout.md`）
 
 ## Step 2.5: QA台帳の回帰トリガー突合
