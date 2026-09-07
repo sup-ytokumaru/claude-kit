@@ -13,7 +13,8 @@ handoff ファイルが複数ある場合は最新を仮選択して進み、仮
 Bash ツールで `.claude/works/handoffs/` ディレクトリを確認する:
 
 ```sh
-ls -1t .claude/works/handoffs/ 2>/dev/null
+# ls はフック経由で出力が潰れることがあるため find で列挙し、更新時刻の新しい順に並べる
+find .claude/works/handoffs -maxdepth 1 -name '*.md' -printf '%T@ %f\n' 2>/dev/null | sort -rn | cut -d' ' -f2-
 ```
 
 ディレクトリが存在しない、またはファイルが0件の場合は **git フォールバック**に切り替える:

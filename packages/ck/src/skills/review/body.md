@@ -34,10 +34,15 @@ npx eslint .       # または bun lint / pnpm lint
 
 ```bash
 # BASE の検出と使用は必ず同一の Bash 呼び出しで行う（シェル変数は呼び出し間で持続しない）
+# 参照の存在を rev-parse で先に確認する（フック経由の git は存在しない参照でも exit 0 で空を返すことがあり、|| フォールバックが働かない）
 BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
-  || git diff --name-only HEAD~1 HEAD 2>/dev/null \
-  || git diff --name-only
+if git rev-parse --verify -q "origin/${BASE:-main}" >/dev/null; then
+  git diff --name-only "origin/${BASE:-main}...HEAD"
+elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+  git diff --name-only HEAD~1 HEAD
+else
+  git diff --name-only
+fi
 ```
 
 デフォルトブランチが main / master 以外でフォールバックが正しく効かない場合は、`git branch -r` の一覧から実在するデフォルトブランチを特定して `origin/<ブランチ>...HEAD` を使う。
@@ -69,14 +74,14 @@ git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
 
 **decisions 整合性:**
 - [ ] プロジェクトの CLAUDE.md に「判断レンズ」節（設計判断で常に当てる観点の一覧）があれば、その観点を差分に当てる（`/discuss`・`/plan` と同じ節を参照する。無ければスキップ）
-- [ ] ブランチスラグに一致する `decisions/` ファイルがある場合、`## Decision` の制約に実装が従っているか（却下された代替案を採用していないか）。照合は、ブランチ名から型プレフィックス（`feat/`・`fix/` 等）を除いた部分を slug とみなし、`decisions/<date>-<slug>.md` の日付を無視して slug 部分と突き合わせる（例: `fix/login-timeout` → `decisions/*-login-timeout.md`）
+- [ ] ブランチスラグに一致する `decisions/` ファイルがある場合、`## Decision` の制約に実装が従っているか（却下された代替案を採用していないか）。照合は、ブランチ名から型プレフィックス（`feat/`・`fix/` 等）を除いた部分を slug とみなし、`decisions/<date>-<slug>.md` の日付を無視して slug 部分と突き合わせる（例: `fix/login-timeout` → `decisions/*-login-timeout.md`）。**ブランチ名から slug が取れない場合（デフォルトブランチ上・ブランチ名が汎用的）は、`plans/` の最新ファイルの slug をフォールバックとして使う**（kickoff / discuss / plan はタスク由来の slug で decisions/・plans/ を作るため、ブランチ名と一致しないことがある）
 
 ## Step 2.5: QA台帳の回帰トリガー突合
 
 `tests/qa/` に QA テストケース台帳がある場合、変更ファイルを各台帳の **回帰トリガー節**（`## 回帰トリガー（L8）`）と突き合わせ、再確認すべきケースを洗い出す。`/qa` が固定した「この機能の◯◯を変更したら → 確認すべきケースID」を、実際の差分に対して引き当てるステップ（`qa → test → review` の連鎖を閉じる）。
 
 ```bash
-ls tests/qa/*.md 2>/dev/null   # 台帳の有無を確認
+find tests/qa -maxdepth 1 -name '*.md' 2>/dev/null   # 台帳の有無を確認（ls はフック経由で出力が潰れることがあるため find を使う）
 ```
 
 - 台帳が**存在しない場合**: 「QA台帳未整備」と記録し、必要なら `/qa` を案内する（このステップはスキップ）。
