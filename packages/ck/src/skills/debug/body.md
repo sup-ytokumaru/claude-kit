@@ -124,3 +124,5 @@ browser_navigate(<該当URL>)
 
 - 軽微修正の場合: 修正がテストで検証済み・decisions 記録済みの状態で `/test` を案内した時点
 - /plan 委譲の場合: `Fix direction` 記録済みの状態で `/plan <bug-slug>` を案内した時点
+
+調査で見つかった別件の不具合候補は本件の修正に混ぜず、`/ck-note` に残す。

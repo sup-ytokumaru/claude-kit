@@ -189,7 +189,7 @@ createServerFn().validator(theSchema).handler(async ({ data }) => {
 
 ## 完了条件
 
-レビュー結果を報告し、`reviews/<date>-<slug>.md` に記録した時点で完了。request-changes の場合は作者の修正後に再レビュー（`/review-others` 再実行）を案内する。
+レビュー結果を報告し、`reviews/<date>-<slug>.md` に記録した時点で完了。request-changes の場合は作者の修正後に再レビュー（`/review-others` 再実行）を案内する。レビュワー側の判断待ち事項は `/ck-todo` に積み、フォローアップを Issue 化する場合は `/git-issue-create` を案内する。
 
 ---
 
