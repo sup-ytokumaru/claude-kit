@@ -2,7 +2,7 @@
 
 実装完了後にユニットテストを作成・実行する。E2E は必要性をユーザーに確認してから `playwright-mcp-e2e` スキルに委譲する。
 
-**位置づけ**: 実装完了 → `/test` → `/review` → `/pr`。`/qa` で `tests/qa/<機能>.md` 台帳を設計済みなら、その `active` ケースをコード化する後段としても働く。
+**位置づけ**: `/implement` → `/qa`（任意）→ `/test` → `/review` → `/commit` → `/pr`。`/qa` で `tests/qa/<機能>.md` 台帳を設計済みなら、その `active` ケースをコード化する後段としても働く。
 
 ## 非対話実行時
 
@@ -12,10 +12,15 @@
 
 ```bash
 # デフォルトブランチとの分岐点からの全変更を対象にする（複数コミットでも漏れない）
+# 参照の存在を rev-parse で先に確認する（フック経由の git は存在しない参照でも exit 0 で空を返すことがあり、|| フォールバックが働かない）
 BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
-  || git diff --name-only HEAD~1 HEAD 2>/dev/null \
-  || git diff --name-only
+if git rev-parse --verify -q "origin/${BASE:-main}" >/dev/null; then
+  git diff --name-only "origin/${BASE:-main}...HEAD"
+elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+  git diff --name-only HEAD~1 HEAD
+else
+  git diff --name-only
+fi
 ```
 
 未コミットの変更がある場合は `git diff --name-only` の結果も対象に加える。
@@ -107,6 +112,7 @@ Skill: ck:playwright-mcp-e2e
 - テストが1件でも失敗している状態で完了を宣言しない
 - 既存テストを削除・修正するときはユーザーに理由を説明してから行う
 - テスト通過のためだけに実装コードを歪めない（テストに合わせてロジックを正しく直すのはOK）
+- **秘匿情報を書き込まない**: テストコード・フィクスチャに実在の顧客名・案件名・認証情報を書き込まない。仕様や既存データから値を引く場合は架空値に置換する（テストは git 管理される）
 
 ## 完了条件
 

@@ -1,14 +1,20 @@
 # コードレビュー
 
-**位置づけ**: `/test` でテスト全通過を確認してから実行する。
+**位置づけ**: `/test` でテスト全通過を確認してから実行する。対象は自分の差分（セルフレビュー）。他者の PR・既存コード全体をレビュワーとして監査する場合は `/review-others` を使う。
 
 実装完了後に以下のステップを順番に実行し、レビュー結果を報告する。
 
+## 非対話実行時
+
+質問せずに Step 1〜2.5 を実行し、Step 3 のエージェントレビューは条件に該当すれば起動する。結果の報告で停止し、`/commit` 以降のスキルは案内するだけで自動起動しない。修正が必要な指摘があっても自動で修正しない。
+
 ---
 
-## Step 1: 自動チェックの実行
+## Step 1: 自動チェック（preflight）の実行
 
 プロジェクトで設定されているチェックコマンドを実行する。エラーがあっても Step 2 以降を続ける。
+
+**スコープの責務分離**: 型・lint・format で機械検出できる問題は、ここで実行した結果（✅ / ❌ N件）を報告に記録するだけで、Step 2 の指摘として再掲しない。Step 2 は機械検出できないもの（意図とのズレ・整合性・並行・セキュリティの設計上の穴）に集中する。プロジェクト固有の根拠がない汎用ベストプラクティスの列挙も対象外。
 
 TypeScript プロジェクトの場合:
 ```bash
@@ -28,10 +34,15 @@ npx eslint .       # または bun lint / pnpm lint
 
 ```bash
 # BASE の検出と使用は必ず同一の Bash 呼び出しで行う（シェル変数は呼び出し間で持続しない）
+# 参照の存在を rev-parse で先に確認する（フック経由の git は存在しない参照でも exit 0 で空を返すことがあり、|| フォールバックが働かない）
 BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
-  || git diff --name-only HEAD~1 HEAD 2>/dev/null \
-  || git diff --name-only
+if git rev-parse --verify -q "origin/${BASE:-main}" >/dev/null; then
+  git diff --name-only "origin/${BASE:-main}...HEAD"
+elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+  git diff --name-only HEAD~1 HEAD
+else
+  git diff --name-only
+fi
 ```
 
 デフォルトブランチが main / master 以外でフォールバックが正しく効かない場合は、`git branch -r` の一覧から実在するデフォルトブランチを特定して `origin/<ブランチ>...HEAD` を使う。
@@ -62,14 +73,15 @@ git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
 - [ ] リトライ・再実行で冪等か。コミット境界・ロック粒度は適切か
 
 **decisions 整合性:**
-- [ ] ブランチスラグに一致する `decisions/` ファイルがある場合、`## Decision` の制約に実装が従っているか（却下された代替案を採用していないか）。照合は、ブランチ名から型プレフィックス（`feat/`・`fix/` 等）を除いた部分を slug とみなし、`decisions/<date>-<slug>.md` の日付を無視して slug 部分と突き合わせる（例: `fix/login-timeout` → `decisions/*-login-timeout.md`）
+- [ ] プロジェクトの CLAUDE.md に「判断レンズ」節（設計判断で常に当てる観点の一覧）があれば、その観点を差分に当てる（`/discuss`・`/plan` と同じ節を参照する。無ければスキップ）
+- [ ] ブランチスラグに一致する `decisions/` ファイルがある場合、`## Decision` の制約に実装が従っているか（却下された代替案を採用していないか）。照合は、ブランチ名から型プレフィックス（`feat/`・`fix/` 等）を除いた部分を slug とみなし、`decisions/<date>-<slug>.md` の日付を無視して slug 部分と突き合わせる（例: `fix/login-timeout` → `decisions/*-login-timeout.md`）。**ブランチ名から slug が取れない場合（デフォルトブランチ上・ブランチ名が汎用的）、または取れても一致する decisions/ ファイルが無い場合は、`plans/` の最新ファイルの slug をフォールバックとして使う**（`/pr` と同じ照合規則）（kickoff / discuss / plan はタスク由来の slug で decisions/・plans/ を作るため、ブランチ名と一致しないことがある）
 
 ## Step 2.5: QA台帳の回帰トリガー突合
 
 `tests/qa/` に QA テストケース台帳がある場合、変更ファイルを各台帳の **回帰トリガー節**（`## 回帰トリガー（L8）`）と突き合わせ、再確認すべきケースを洗い出す。`/qa` が固定した「この機能の◯◯を変更したら → 確認すべきケースID」を、実際の差分に対して引き当てるステップ（`qa → test → review` の連鎖を閉じる）。
 
 ```bash
-ls tests/qa/*.md 2>/dev/null   # 台帳の有無を確認
+find tests/qa -maxdepth 1 -name '*.md' 2>/dev/null   # 台帳の有無を確認（ls はフック経由で出力が潰れることがあるため find を使う）
 ```
 
 - 台帳が**存在しない場合**: 「QA台帳未整備」と記録し、必要なら `/qa` を案内する（このステップはスキップ）。
@@ -88,6 +100,8 @@ ls tests/qa/*.md 2>/dev/null   # 台帳の有無を確認
   `BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||'); git diff --stat "origin/${BASE:-main}...HEAD" | tail -1`
 - 新規ファイルを追加している場合（新規機能追加）
 
+**差分が大きい場合の分割**: 変更ファイルが 15 件以上のときは、ディレクトリ・機能などのエリア単位で Explore サブエージェント（最大 2 つ、並列）にエリア内のレビューを分担させる。**横断チェック（decisions 整合・QA 回帰トリガー・エリアをまたぐ整合性）はサブエージェントに委譲せずメインが担当する**（分割すると見えなくなる指摘だから）。
+
 ---
 
 ## レビュー結果の報告形式
@@ -99,22 +113,31 @@ ls tests/qa/*.md 2>/dev/null   # 台帳の有無を確認
 - Lint: ✅ / ❌ N件
 - QA回帰トリガー: 該当なし / N件ヒット（再確認: ORD-C2, STK-C3 …）/ 台帳未整備
 
-**[high/medium/low]** カテゴリ
+**[high/medium/low]** カテゴリ — 自動修正可 / 判断要
 - ファイル: path/to/file.ts:行番号
 - 問題: 内容
-- 修正案: 対応方法
+- 修正案: 対応方法（判断要の場合は「論点: 何を誰が決めるか」）
+- 根拠: 従うべき制約の所在（high のみ必須。CLAUDE.md・decisions/・plans/ の該当箇所）
 
-合計 N件
+合計 N件（自動修正可 N / 判断要 N）
 ```
+
+**指摘の 2 軸**: 重要度（high/medium/low）に加え、各指摘に **Fix mode** を付ける。分水嶺は「修正が具体手順の一列で表せるか」。表せるなら「自動修正可」（修正案をそのまま適用できる）、設計・仕様・優先度の判断が要るなら「判断要」（`/ck-todo` に積む対象）。
+
+**載せない指摘**: 修正案も論点も書けない指摘は報告に載せない（「気になる」だけの所感はノイズ）。
+
+**high の根拠規律**: high は必ず文書化済みの制約（CLAUDE.md・`decisions/` の Decision・`plans/` の検証基準）に辿れること。辿れない場合は high にせず「判断要」に落とす。レビューの中で新しい制約を発明しない（制約が要るなら `/discuss` で決める）。
 
 問題なし: 「レビュー完了 — 指摘事項なし」と明示し、次工程として `/commit`（論理単位への分割コミット）→ `/pr` を案内する。セッションをここで区切る場合は `/handoff` を併せて案内する。
 
 | 重要度 | 基準 |
 |--------|------|
-| high   | セキュリティ・認証漏れ・本番障害リスク |
+| high   | セキュリティ・認証漏れ・本番障害リスク（文書化済み制約に辿れるもの） |
 | medium | 機能の正確性・保守性に影響 |
 | low    | コード品質・規約違反 |
 
+**繰り返す指摘**: 同種の指摘がこのプロジェクトで 3 回目（Rule of Three）に達したと分かる場合は、指摘の末尾で `/doc-this` による規約の文書化を提案する（レビューのたびに同じことを書かない）。
+
 ## 完了条件
 
-レビュー結果を報告した時点で完了。問題なしなら `/commit` → `/pr` のチェーン（区切るなら `/handoff`）を、問題ありなら修正後に `/review` 再実行を案内する。
+レビュー結果を報告した時点で完了。問題なしなら `/commit` → `/pr` のチェーン（区切るなら `/handoff`）を、問題ありなら修正後に `/review` 再実行を案内する。ユーザー判断が要る指摘は `/ck-todo` に積み、修正を別 Issue に切り出す場合は `/git-issue-create` を案内する。

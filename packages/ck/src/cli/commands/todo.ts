@@ -93,6 +93,12 @@ todoCommand
     const exact = name.endsWith('.md') ? name : `${name}.md`;
     let matches = files.filter(f => f === exact);
     if (matches.length === 0) matches = files.filter(f => f.includes(name));
+    // 日本語のみの TODO はファイル名がタイムスタンプになり名前で引けないため、本文タイトルの部分一致にもフォールバックする
+    if (matches.length === 0) {
+      matches = readTodos(dir)
+        .filter(t => t.title.includes(name))
+        .map(t => t.file);
+    }
     if (matches.length === 0) {
       console.error(`TODO が見つかりません: ${name}`);
       process.exit(1);

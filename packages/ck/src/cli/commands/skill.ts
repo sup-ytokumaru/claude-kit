@@ -53,6 +53,47 @@ export function toolMismatches(body: string, allowedTools: string): Array<{ tool
   ).map(sig => ({ tool: sig.accepts[0], label: sig.label }));
 }
 
+// 全スキル本体に必須の定型節（見出し行と完全一致で判定する）
+export const REQUIRED_SECTIONS = ['## 非対話実行時', '## 完了条件'] as const;
+
+// body 内の `/<name>` 参照のうち、スキルではなく Claude Code 組み込みコマンドを指すもの（死活検査から除外）
+export const BUILTIN_COMMANDS = new Set(['mcp']);
+
+// allowed-tools に裸の `Bash` を宣言してよい実装系スキル。
+// プロジェクト固有のビルド・テストコマンドを実行するため事前列挙が本質的に困難なもののみ列挙する
+export const BARE_BASH_ALLOWED = new Set([
+  'debug', 'implement', 'migrate-verify', 'playwright-mcp-e2e', 'qa', 'refactor', 'review', 'test',
+]);
+
+// body 内のスキル参照（`` `/<name>` `` 記法）を抽出する。`Skill: <name>` 形式は TOOL_SIGNALS の関心事で対象外
+function skillLinks(body: string): string[] {
+  return [...body.matchAll(/`\/([a-z][a-z0-9-]*)`/g)].map(m => m[1]);
+}
+
+// 必須の定型節のうち body に無い見出しを返す（doctor では warn）
+export function missingSections(body: string): string[] {
+  return REQUIRED_SECTIONS.filter(h => !new RegExp(`^${h}$`, 'm').test(body));
+}
+
+// body が参照するスキル名のうち、実在せず組み込みコマンドでもないものを返す（doctor では error）
+export function deadSkillLinks(body: string, skillNames: Set<string>): string[] {
+  return [...new Set(skillLinks(body))].filter(n => !skillNames.has(n) && !BUILTIN_COMMANDS.has(n));
+}
+
+// 全 body の参照グラフから、他のどのスキルからも参照されないスキル名を返す（doctor では warn）。自己参照は被参照に数えない
+export function orphanSkills(bodies: Map<string, string>): string[] {
+  const referenced = new Set<string>();
+  for (const [name, body] of bodies) {
+    for (const link of skillLinks(body)) if (link !== name) referenced.add(link);
+  }
+  return [...bodies.keys()].filter(n => !referenced.has(n)).sort();
+}
+
+// allowed-tools に裸の `Bash`（`Bash(<cmd>:*)` のスコープ指定なし）が含まれていれば true
+export function hasBareBash(allowedTools: string): boolean {
+  return allowedTools.split(',').map(t => t.trim()).includes('Bash');
+}
+
 skillCommand
   .command('doctor')
   .description('スタブ（plugins/）と本体（src/skills/）の整合性を検査')
@@ -98,6 +139,9 @@ skillCommand
 
       // body が要求するツールが allowed-tools に揃っているか（ヒューリスティック検査）
       const allowedTools = fm[1].match(/^allowed-tools:\s*(.+)$/m)?.[1] ?? '';
+      if (hasBareBash(allowedTools) && !BARE_BASH_ALLOWED.has(s)) {
+        warns.push(`${s}: allowed-tools に裸の Bash が含まれています（実装系スキル以外は Bash(<cmd>:*) で列挙してください）`);
+      }
       const bodyPath = join(SKILLS_DIR, s, 'body.md');
       if (allowedTools && existsSync(bodyPath)) {
         const body = readFileSync(bodyPath, 'utf-8');
@@ -107,16 +151,24 @@ skillCommand
       }
     }
 
+    const bodyTexts = new Map<string, string>();
+    const skillNames = new Set(bodies);
     for (const b of bodies) {
       const bodyPath = join(SKILLS_DIR, b, 'body.md');
       if (!existsSync(bodyPath)) {
         errors.push(`${b}: body.md がありません`);
         continue;
       }
-      if (readFileSync(bodyPath, 'utf-8').startsWith('---\n')) {
+      const body = readFileSync(bodyPath, 'utf-8');
+      bodyTexts.set(b, body);
+      if (body.startsWith('---\n')) {
         errors.push(`${b}: body.md にフロントマターがあります（メタデータはスタブに一本化）`);
       }
+      for (const h of missingSections(body)) warns.push(`${b}: 定型節 ${h} がありません`);
+      for (const n of deadSkillLinks(body, skillNames)) errors.push(`${b}: 存在しないスキル /${n} を参照しています`);
     }
+    // 参照グラフは全 body を読み終えてから集計する
+    for (const o of orphanSkills(bodyTexts)) warns.push(`${o}: どのスキルからも参照されていません（ユーザー直接起動のみ）`);
 
     warns.forEach(w => console.log(`⚠ ${w}`));
     if (errors.length > 0) {
