@@ -19,18 +19,23 @@
 # <トピックタイトル>
 
 ## Context
+
 <背景 — なぜ議論するのか>
 
 ## Decision
+
 <確定した制約の箇条書き>
 
 ## Consequences
+
 <下流への影響>
 
 ## Discussion Log
 
 ### <YYYY-MM-DD> discuss
+
 #### Decision: <一行の要約>
+
 - **Constraint**: <今後の制約として確定したこと>
 - **Why**: <理由>
 - **Rejected alternatives**: <却下した選択肢（あれば）>
