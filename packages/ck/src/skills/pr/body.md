@@ -143,4 +143,4 @@ glab mr create --title "<タイトル>" --description "$(cat <一時ファイル
 
 ## 完了条件
 
-PR/MR の URL をユーザーに表示した時点で完了。
+PR/MR の URL をユーザーに表示した時点で完了。マージされたあとのブランチ・worktree の回収は `/finish` が担う（PR 作成の時点では worktree を消さない。指摘対応をその作業コピーで行うため）。
