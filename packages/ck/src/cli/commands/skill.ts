@@ -63,6 +63,7 @@ export const BUILTIN_COMMANDS = new Set(['mcp']);
 // プロジェクト固有のビルド・テストコマンドを実行するため事前列挙が本質的に困難なもののみ列挙する
 export const BARE_BASH_ALLOWED = new Set([
   'debug', 'implement', 'migrate-verify', 'playwright-mcp-e2e', 'qa', 'refactor', 'review', 'test',
+  'verify',
 ]);
 
 // body 内のスキル参照（`` `/<name>` `` 記法）を抽出する。`Skill: <name>` 形式は TOOL_SIGNALS の関心事で対象外
