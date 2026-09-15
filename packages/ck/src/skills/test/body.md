@@ -38,6 +38,9 @@ fi
 | `bun.lock`（または `bun.lockb`）があり vitest/jest の依存が無い | Bun test | `bun test` |
 | `pyproject.toml` / `requirements*.txt` に `pytest` | pytest | `pytest` |
 | `go.mod` が存在する | Go test | `go test ./...` |
+| `Gemfile` に `rspec` | RSpec | `bundle exec rspec` |
+| `Gemfile` に `rails` があり rspec の依存が無い | Rails minitest | `bin/rails test` |
+| `composer.json` の依存に `phpunit` | PHPUnit | `vendor/bin/phpunit` |
 
 テストコマンドが `package.json` の `scripts` にある場合はそちらを優先する。
 
