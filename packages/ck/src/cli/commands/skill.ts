@@ -95,6 +95,64 @@ export function hasBareBash(allowedTools: string): boolean {
   return allowedTools.split(',').map(t => t.trim()).includes('Bash');
 }
 
+// 一度直した壊れパターンの再発を検出する（doctor では error）。
+// 直した経緯は fix に残し、同じ修正を別スキルで繰り返さない
+export const BROKEN_PATTERNS: Array<{ label: string; pattern: RegExp; fix: string }> = [
+  {
+    label: '`||` 連鎖による git diff のフォールバック',
+    // 「git diff … \」の次行（または同行）が「|| git diff」で始まる形。フック経由の git は存在しない参照でも exit 0 で空を返すため、|| は働かない
+    pattern: /git diff[^\n]*\n?\s*\|\|\s*git diff/,
+    fix: 'git rev-parse --verify -q で参照の存在を確認してから if/elif で分岐する（test / review の Step 1〜2 と同じ形）',
+  },
+];
+
+// body 内で再発している壊れパターンを返す
+export function brokenPatterns(body: string): Array<{ label: string; fix: string }> {
+  return BROKEN_PATTERNS.filter(b => b.pattern.test(body)).map(({ label, fix }) => ({ label, fix }));
+}
+
+// 複数スキルに複製された同一役割のコード片。marker を含むフェンス付きコードブロックを比較し、
+// 内容がスキル間でズレていたら横展開漏れとみなす（doctor では error）
+export const SHARED_SNIPPETS: Array<{ label: string; marker: RegExp }> = [
+  {
+    label: 'デフォルトブランチ分岐点からの変更ファイル取得',
+    // 行頭の空白は許容する（ブロック内でインデントされていても同じコード片とみなす）
+    marker: /^\s*BASE=\$\(git symbolic-ref refs\/remotes\/origin\/HEAD/m,
+  },
+];
+
+// フェンス付きコードブロック（```lang … ```）の中身を列挙する。
+// リスト内などでインデントされたフェンスも拾う（marker 側が行頭空白を許容しているのと揃える。拾えないと比較対象から静かに脱落する）
+function fencedBlocks(body: string): string[] {
+  return [...body.matchAll(/^[ \t]*```[^\n]*\n([\s\S]*?)^[ \t]*```/gm)].map(m => m[1]);
+}
+
+// コメント行・行末コメント・空行・行頭行末の空白を除いて比較用に正規化する（説明コメントの差は許容し、コマンドの差だけを見る）。
+// 行末コメントは「2 個以上の空白 + #」を目印にする（`sed 's|#||'` のように引用内に # を含むコマンドを巻き込まないための規約）
+function normalizeSnippet(block: string): string {
+  return block
+    .split('\n')
+    .map(l => l.trim().replace(/\s{2,}#.*$/, ''))
+    .filter(l => l !== '' && !l.startsWith('#'))
+    .join('\n');
+}
+
+// marker を含むコードブロックを全 body から集め、正規化した内容ごとに「どのスキルが持つか」を返す。
+// 返り値のキー数が 2 以上なら複製がズレている
+export function sharedSnippetVariants(bodies: Map<string, string>, marker: RegExp): Map<string, string[]> {
+  const variants = new Map<string, string[]>();
+  for (const [name, body] of bodies) {
+    for (const block of fencedBlocks(body)) {
+      if (!marker.test(block)) continue;
+      const key = normalizeSnippet(block);
+      const names = variants.get(key) ?? [];
+      // 同一スキルが同じブロックを複数持っていてもエラー文にスキル名を重複して並べない
+      if (!names.includes(name)) variants.set(key, [...names, name]);
+    }
+  }
+  return variants;
+}
+
 skillCommand
   .command('doctor')
   .description('スタブ（plugins/）と本体（src/skills/）の整合性を検査')
@@ -167,9 +225,18 @@ skillCommand
       }
       for (const h of missingSections(body)) warns.push(`${b}: 定型節 ${h} がありません`);
       for (const n of deadSkillLinks(body, skillNames)) errors.push(`${b}: 存在しないスキル /${n} を参照しています`);
+      for (const bp of brokenPatterns(body)) errors.push(`${b}: 既知の壊れパターン「${bp.label}」が再発しています。直し方: ${bp.fix}`);
     }
     // 参照グラフは全 body を読み終えてから集計する
     for (const o of orphanSkills(bodyTexts)) warns.push(`${o}: どのスキルからも参照されていません（ユーザー直接起動のみ）`);
+    // 複製コード片のズレも全 body を読み終えてから比較する
+    for (const snip of SHARED_SNIPPETS) {
+      const variants = sharedSnippetVariants(bodyTexts, snip.marker);
+      if (variants.size > 1) {
+        const groups = [...variants.values()].map(names => `[${names.join(', ')}]`).join(' / ');
+        errors.push(`横展開漏れ: 「${snip.label}」のコード片が ${variants.size} 種類に分かれています: ${groups}`);
+      }
+    }
 
     warns.forEach(w => console.log(`⚠ ${w}`));
     if (errors.length > 0) {

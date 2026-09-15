@@ -83,7 +83,7 @@ UI: `/test` の後段で `/playwright-mcp-e2e`（E2E テストの作成。qa 台
 ### packages/ck 内部構造
 
 - `src/cli.ts` — エントリポイント（Commander で4コマンドを登録）
-- `src/cli/commands/skill.ts` — `ck skill print/list/copy/update/doctor`（`SKILLS_DIR = src/skills/` を参照。`doctor` はスタブ⇔本体の整合性検査）
+- `src/cli/commands/skill.ts` — `ck skill print/list/copy/update/doctor`（`SKILLS_DIR = src/skills/` を参照。`doctor` はスタブ⇔本体の整合性検査。`BROKEN_PATTERNS` で一度直した壊れパターンの再発を、`SHARED_SNIPPETS` でスキル間に複製されたコード片のズレを error にする）
 - `src/cli/commands/note.ts` — `ck note <content> [--global]`（`.notes/` または `~/.ck-notes/` に書き込み）
 - `src/cli/commands/todo.ts` — `ck todo <content>` / `ck todo list [--all]` / `ck todo done <name>`（`.notes/todos/` または `~/.ck-notes/todos/`、`--global` でグローバル）
 - `src/cli/commands/setup.ts` — `claude plugin install plugins/ck` を実行

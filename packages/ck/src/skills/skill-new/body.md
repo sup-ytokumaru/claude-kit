@@ -19,6 +19,7 @@ ck のスキルを**新規作成・改訂する**ためのメタスキル。clau
 - 一度きりの解決策 → `ck note` に控える
 - プロジェクト固有の規約・経緯 → `/doc-this` で `.claude/docs/` へ
 - 正規表現や検査で機械的に強制できる制約 → `ck skill doctor` の検査を足す（`packages/ck/src/cli/commands/skill.ts`）。**文章での注意喚起より検査のほうが確実に効く**
+- **複数スキルで同じ壊れ方を直した** → 直した形を文章で広めるのではなく、`skill.ts` の `BROKEN_PATTERNS`（旧パターンの再発を error）か `SHARED_SNIPPETS`（複製コード片のズレを error）に登録する。今回直した箇所以外に同じ旧パターンが残っていないかを doctor に探させる
 - 既存スキルに 1 節足せば済む内容 → 新設せず改訂する（スキルの数は導線の複雑さに直結する）
 
 ## claude-kit の構成
