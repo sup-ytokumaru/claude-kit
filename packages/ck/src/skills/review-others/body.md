@@ -37,10 +37,15 @@
 3. 対象ブランチ上にいる場合、デフォルトブランチとの分岐点からの全変更を対象にする（複数コミットでも漏れない）:
 
 ```bash
+# 参照の存在を rev-parse で先に確認する（フック経由の git は存在しない参照でも exit 0 で空を返すことがあり、|| フォールバックが働かない）
 BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
-  || git diff --name-only HEAD~1 HEAD 2>/dev/null \
-  || git diff --name-only
+if git rev-parse --verify -q "origin/${BASE:-main}" >/dev/null; then
+  git diff --name-only "origin/${BASE:-main}...HEAD"
+elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+  git diff --name-only HEAD~1 HEAD
+else
+  git diff --name-only
+fi
 ```
 
 `HEAD~1` へのフォールバックが発動した場合は**直近1コミットしか見ていない**（「複数コミットでも漏れない」が成立していない）。縮退したことをレビュー報告の冒頭に明記し、可能なら `git fetch origin` 後に再実行する。
@@ -52,14 +57,34 @@ git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
 差分が無いので、対象ファイル/ディレクトリを**コールドで精読**する。「最近 git で触られた箇所」に偏らず、対象全体を地図化してから読む。
 
 1. 規模を掴む（対象配下のファイル数・行数。大きければ Step 6 の独立視点起動を視野に入れる）。
-2. エントリポイントを grep で特定する:
+2. **対象スタックを判定してから**エントリポイントを grep で特定する。エントリ規約はスタックごとに違うため、当て推量の grep で空振りを重ねない:
 
 ```bash
-grep -rln "createServerFn\|createFileRoute\|export const Route" <対象パス>   # ルート / server fn
-grep -rln "pgTable\|sqliteTable\|defineTable" <対象パス>                      # スキーマ
+# JS/TS: 依存からフレームワークを判定する
+jq -r '(.dependencies // {}) + (.devDependencies // {}) | keys[]' package.json packages/*/package.json apps/*/package.json 2>/dev/null | sort -u  # モノレポも拾う
+# 他言語: 依存定義ファイルの有無を見る
+ls Gemfile requirements.txt pyproject.toml go.mod pom.xml composer.json 2>/dev/null
 ```
 
-（対象スタックが違えば、各フレームワークのルーティング/エントリ規約に読み替える）
+判定結果に応じてパターンを選び、`grep -rln "<パターン>" <対象パス>` で当てる:
+
+| スタック | ルート / エントリ | スキーマ / データ層 |
+|---|---|---|
+| TanStack Start / Router | `createFileRoute`・`createServerFn`・`export const Route` | — |
+| Next.js | `route.ts`・`page.tsx`・`generateMetadata` | — |
+| Remix / React Router | `export const loader`・`export const action` | — |
+| Express / Fastify / Hono | `app.get(`・`router.`・`new Hono(` | — |
+| NestJS | `@Controller`・`@Get(`・`@Post(` | — |
+| Rails | `config/routes.rb`・`< ApplicationController` | `db/schema.rb`・`db/migrate/` |
+| Django | `urlpatterns`・`urls.py` | `models.py`・`class Meta` |
+| Spring | `@RestController`・`@RequestMapping` | `@Entity` |
+| Drizzle | — | `pgTable`・`sqliteTable`・`mysqlTable` |
+| Prisma | — | `schema.prisma`・`^model ` |
+| TypeORM | — | `@Entity`・`@Column` |
+| ActiveRecord / Eloquent | — | `< ApplicationRecord`・`extends Model` |
+
+**表に無いスタック**は、まずディレクトリ命名から当たりをつける（`routes/`・`controllers/`・`api/`・`handlers/` → エントリ、`models/`・`entities/`・`migrations/`・`schema*` → データ層）。
+それでも掴めなければ、依存定義から主要フレームワークを1つ特定し、そのルーティング規約を調べてからパターンを決める。
 
 3. 起点から呼び出しを辿り、**データの流れ・認可境界・状態の置き場**を地図化する。
 4. 地図ができたら Step 3 以降のレンズを当てる。

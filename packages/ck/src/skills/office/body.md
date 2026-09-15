@@ -132,6 +132,7 @@ try:
         print("> 注: python-docx が古いため表は本文の後にまとめて出力される（文書内の位置とは異なる）")
         blocks = list(doc.paragraphs) + list(doc.tables)
     tbl_n = 0
+    para_n = 0
     for block in blocks:
         if isinstance(block, Table):
             tbl_n += 1
@@ -139,6 +140,7 @@ try:
             for row in block.rows:
                 print(" | ".join(cell.text.strip() for cell in row.cells))
         elif block.text.strip():
+            para_n += 1
             # style が None の段落（スタイル未解決）は本文扱い — 1段落の異常で全体を落とさない
             style = block.style.name if block.style else ""
             # 見出しスタイルは英語 "Heading 1" / 日本語 "見出し 1" の両方に対応する。
@@ -151,6 +153,8 @@ try:
                 print(f"\n# {block.text}")
             else:
                 print(block.text)
+    # Step 4 の規模報告用。別コマンドで数え直さずに済むよう出力の最後に集計を添える
+    print(f"\n---\n規模: 段落 {para_n} / 表 {tbl_n}")
 except Exception as e:
     print(f"ERROR: {e}", file=sys.stderr)
     sys.exit(1)

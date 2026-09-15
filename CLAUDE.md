@@ -62,10 +62,11 @@ plugins/ck/    — Claude Code プラグインスタブ
 
 ### スキルのワークフロー順序
 
-主系列: `/kickoff → /discuss → /plan → /implement → /qa（任意） → /test → /review → /commit → /pr → /handoff`。次のセッションは `/resume` で復帰する。
+主系列: `/kickoff → /discuss → /plan → /implement → /qa（任意） → /test → /review → /commit → /pr → /finish → /handoff`。次のセッションは `/resume` で復帰する。
+`/finish` は PR がマージされたあとのブランチ・worktree の回収を担う（`/pr` の時点では worktree を残す）。
 `/qa` は `/test` の前段（台帳を設計してからコード化する）。`/implement` の出口で必ず提案され、台帳が要らない規模なら飛ばして `/test` へ進む。
 
-補助（主系列のどこからでも）: `/debug`（不具合調査）・`/refactor`（挙動不変の構造改善）・`/review-others`（他者コードの監査）・`/git-issue-plan`（Issue 起点の着手）・`/git-issue-create`（フォローアップの起票）・`/ck-todo`（判断待ちの論点を積む）・`/ck-todo-list`（TODO の確認・消化）・`/ck-note`（調査中の気づき）・`/doc-this`（恒久ドキュメント化）・`/help`（プロジェクト固有の質問）。
+補助（主系列のどこからでも）: `/debug`（不具合調査）・`/refactor`（挙動不変の構造改善）・`/review-others`（他者コードの監査）・`/git-issue-plan`（Issue 起点の着手）・`/git-issue-create`（フォローアップの起票）・`/ck-todo`（判断待ちの論点を積む）・`/ck-todo-list`（TODO の確認・消化）・`/ck-note`（調査中の気づき）・`/doc-this`（恒久ドキュメント化）・`/help`（プロジェクト固有の質問）・`/verify`（完了主張の前に検証の証跡を揃えるゲート）・`/fanout`（独立した複数作業のサブエージェント並列配分）・`/skill-new`（ck スキルの新規作成・改訂）。
 UI: `/test` の後段で `/playwright-mcp-e2e`（E2E テストの作成。qa 台帳のケースID をテスト名に埋め込む）。仕様書系: `/office → /spec-import → /qa`。移行系: `/qa`（移行モード）→ `/migrate-verify`。新規リポジトリ: `/new-project`（`/kickoff` が Greenfield 判定で誘導）。
 
 各スキルの成果物の保存先は後述「ノート・TODOのストレージ」を正本とする。
@@ -82,7 +83,7 @@ UI: `/test` の後段で `/playwright-mcp-e2e`（E2E テストの作成。qa 台
 ### packages/ck 内部構造
 
 - `src/cli.ts` — エントリポイント（Commander で4コマンドを登録）
-- `src/cli/commands/skill.ts` — `ck skill print/list/copy/update/doctor`（`SKILLS_DIR = src/skills/` を参照。`doctor` はスタブ⇔本体の整合性検査）
+- `src/cli/commands/skill.ts` — `ck skill print/list/copy/update/doctor`（`SKILLS_DIR = src/skills/` を参照。`doctor` はスタブ⇔本体の整合性検査。`BROKEN_PATTERNS` で一度直した壊れパターンの再発を、`SHARED_SNIPPETS` でスキル間に複製されたコード片のズレを error にする）
 - `src/cli/commands/note.ts` — `ck note <content> [--global]`（`.notes/` または `~/.ck-notes/` に書き込み）
 - `src/cli/commands/todo.ts` — `ck todo <content>` / `ck todo list [--all]` / `ck todo done <name>`（`.notes/todos/` または `~/.ck-notes/todos/`、`--global` でグローバル）
 - `src/cli/commands/setup.ts` — `claude plugin install plugins/ck` を実行
@@ -111,6 +112,8 @@ QAテストケース台帳は `tests/qa/<機能名>.md`（機能単位）と横�
 - `skills/<name>/SKILL.md` — フロントマター（name/description/allowed-tools）＋ `!`ck skill print <name>`` の1行
 
 ## 新しいスキルを追加する場合
+
+`/skill-new` が以下の手順と作法（定型節・導線接続・doctor 検査）を内蔵しているため、通常はそちらを起動する。手作業で行う場合:
 
 1. `packages/ck/src/skills/<name>/body.md` を作成（スキル本体。フロントマターは書かない）
 2. `plugins/ck/skills/<name>/SKILL.md` を作成（スタブ、既存を参考）

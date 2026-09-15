@@ -3,10 +3,13 @@ import { join } from 'path';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import {
   BARE_BASH_ALLOWED,
+  SHARED_SNIPPETS,
+  brokenPatterns,
   deadSkillLinks,
   hasBareBash,
   missingSections,
   orphanSkills,
+  sharedSnippetVariants,
   toolMismatches,
 } from './skill';
 
@@ -145,6 +148,122 @@ describe('toolMismatches: 検出しない（許可済み・否定的言及）', 
   });
 });
 
+
+describe('brokenPatterns: 一度直した壊れパターンの再発を返す', () => {
+  const OLD = [
+    'BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed \'s|refs/remotes/origin/||\')',
+    'git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \\',
+    '  || git diff --name-only HEAD~1 HEAD 2>/dev/null \\',
+    '  || git diff --name-only',
+  ].join('\n');
+  const FIXED = [
+    '# フック経由の git は存在しない参照でも exit 0 で空を返すことがあり、|| フォールバックが働かない',
+    'if git rev-parse --verify -q "origin/${BASE:-main}" >/dev/null; then',
+    '  git diff --name-only "origin/${BASE:-main}...HEAD"',
+    'elif git rev-parse --verify -q HEAD~1 >/dev/null; then',
+    '  git diff --name-only HEAD~1 HEAD',
+    'else',
+    '  git diff --name-only',
+    'fi',
+  ].join('\n');
+
+  test('複数行の `|| git diff` 連鎖を検出する', () => {
+    expect(brokenPatterns(OLD).map(b => b.label)).toEqual(['`||` 連鎖による git diff のフォールバック']);
+  });
+
+  test('1 行に畳んだ `|| git diff` も検出する', () => {
+    expect(brokenPatterns('git diff --name-only origin/main...HEAD || git diff --name-only')).toHaveLength(1);
+  });
+
+  test('rev-parse で分岐する修正後の形は検出しない（説明コメント中の「|| フォールバック」も含む）', () => {
+    expect(brokenPatterns(FIXED)).toEqual([]);
+  });
+
+  test('git diff と無関係な `||` は検出しない', () => {
+    expect(brokenPatterns('!`ck skill print x || echo "ERROR"`\ntest -d src && echo has || echo no')).toEqual([]);
+  });
+});
+
+describe('sharedSnippetVariants: 複製コード片のズレを返す', () => {
+  // 配列の並び順に依存しないよう label で該当エントリを引く（先頭に別エントリを足しても本テストが空洞化しない）
+  const marker = SHARED_SNIPPETS.find(s => s.label === 'デフォルトブランチ分岐点からの変更ファイル取得')!.marker;
+  const fence = (lines: string[]) => '本文\n\n```bash\n' + lines.join('\n') + '\n```\n\n続き';
+  const BASE = 'BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed \'s|refs/remotes/origin/||\')';
+
+  test('コメント・空行・インデントだけが違う複製は 1 種類に畳む', () => {
+    const bodies = new Map([
+      ['test', fence(['# 説明 A', BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"'])],
+      ['review', fence(['# 説明 B', '', '  ' + BASE, '  git diff --name-only "origin/${BASE:-main}...HEAD"'])],
+    ]);
+    const v = sharedSnippetVariants(bodies, marker);
+    expect(v.size).toBe(1);
+    expect([...v.values()][0]).toEqual(['test', 'review']);
+  });
+
+  test('コマンドが 1 行でも違えば別種類として分ける', () => {
+    const bodies = new Map([
+      ['test', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"'])],
+      ['review-others', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD" || git diff --name-only'])],
+    ]);
+    expect(sharedSnippetVariants(bodies, marker).size).toBe(2);
+  });
+
+  test('フェンス外のインライン記述（同一コマンド内の再取得など）は比較対象にしない', () => {
+    const bodies = new Map([
+      ['test', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"'])],
+      ['review', '変更行数は `' + BASE + '; git diff --stat "origin/${BASE:-main}...HEAD" | tail -1` で取る'],
+    ]);
+    expect(sharedSnippetVariants(bodies, marker).size).toBe(1);
+  });
+
+  test('リスト内などでインデントされたフェンスも比較対象に拾う', () => {
+    const indented = '- 手順:\n  ```bash\n  ' + BASE + '\n  git diff --name-only "origin/${BASE:-main}...HEAD" || git diff --name-only\n  ```\n';
+    const bodies = new Map([
+      ['test', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"'])],
+      ['review', indented],
+    ]);
+    const v = sharedSnippetVariants(bodies, marker);
+    expect(v.size).toBe(2);
+    expect([...v.values()].flat().sort()).toEqual(['review', 'test']);
+  });
+
+  test('行末コメントの文言差だけなら 1 種類に畳む（引用内の # はコマンドとして残す）', () => {
+    const bodies = new Map([
+      ['test', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"  # 参照が無ければ空', "sed 's|#||'"])],
+      ['review', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"  # 分岐点から', "sed 's|#||'"])],
+      ['other', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"', "sed 's|x||'"])],
+    ]);
+    const v = sharedSnippetVariants(bodies, marker);
+    expect(v.size).toBe(2);
+    expect(v.get([...v.keys()].find(k => k.includes("sed 's|#||'"))!)).toEqual(['test', 'review']);
+  });
+
+  test('同一スキルが同じブロックを 2 回持ってもスキル名は重複させない', () => {
+    const twice = fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"']) + '\n' + fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"']);
+    const v = sharedSnippetVariants(new Map([['review', twice]]), marker);
+    expect([...v.values()]).toEqual([['review']]);
+  });
+
+  test('4 連フェンスの中の 3 連フェンスを閉じと誤認しない（入れ子）', () => {
+    // 外側 ```` の中に ```bash … ``` を含む説明ブロック。外側全体が 1 ブロックとして切り出されるべき
+    const nested = ['````markdown', '手順を示す例:', '```bash', BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"', '```', '続きの説明', '````'].join('\n');
+    const bodies = new Map([
+      ['test', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"'])],
+      ['handoff', nested],
+    ]);
+    const v = sharedSnippetVariants(bodies, marker);
+    // 入れ子側は外側の説明行や内側フェンス行まで含むため test 側とは別種類になり、切り出し自体は 1 回だけ起きる
+    expect(v.size).toBe(2);
+    const nestedKey = [...v.keys()].find(k => k.includes('続きの説明'))!;
+    expect(nestedKey).toContain('手順を示す例:');
+    expect(v.get(nestedKey)).toEqual(['handoff']);
+  });
+
+  test('marker を含むブロックが無ければ空', () => {
+    expect(sharedSnippetVariants(new Map([['x', fence(['git status --short'])]]), marker).size).toBe(0);
+  });
+});
+
 describe('実リポジトリの全スキルが整合している（回帰テスト）', () => {
   const SKILLS_DIR = join(import.meta.dir, '../../skills');
   const PLUGIN_SKILLS_DIR = join(import.meta.dir, '../../../../../plugins/ck/skills');
@@ -183,4 +302,19 @@ describe('実リポジトリの全スキルが整合している（回帰テス�
   test('どのスキルからも参照されない孤児スキルがない', () => {
     expect(orphanSkills(bodies)).toEqual([]);
   });
+
+  for (const s of stubs) {
+    test(`${s}: 既知の壊れパターンが再発していない`, () => {
+      expect(brokenPatterns(bodies.get(s)!)).toEqual([]);
+    });
+  }
+
+  for (const snip of SHARED_SNIPPETS) {
+    test(`複製コード片「${snip.label}」がスキル間でズレていない`, () => {
+      const variants = sharedSnippetVariants(bodies, snip.marker);
+      expect(variants.size).toBeLessThanOrEqual(1);
+      // 複製が消えて 1 箇所以下になったら検査の存在意義を見直す（marker の陳腐化検知）
+      expect([...variants.values()].flat().length).toBeGreaterThanOrEqual(2);
+    });
+  }
 });
