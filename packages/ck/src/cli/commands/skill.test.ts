@@ -244,6 +244,21 @@ describe('sharedSnippetVariants: 複製コード片のズレを返す', () => {
     expect([...v.values()]).toEqual([['review']]);
   });
 
+  test('4 連フェンスの中の 3 連フェンスを閉じと誤認しない（入れ子）', () => {
+    // 外側 ```` の中に ```bash … ``` を含む説明ブロック。外側全体が 1 ブロックとして切り出されるべき
+    const nested = ['````markdown', '手順を示す例:', '```bash', BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"', '```', '続きの説明', '````'].join('\n');
+    const bodies = new Map([
+      ['test', fence([BASE, 'git diff --name-only "origin/${BASE:-main}...HEAD"'])],
+      ['handoff', nested],
+    ]);
+    const v = sharedSnippetVariants(bodies, marker);
+    // 入れ子側は外側の説明行や内側フェンス行まで含むため test 側とは別種類になり、切り出し自体は 1 回だけ起きる
+    expect(v.size).toBe(2);
+    const nestedKey = [...v.keys()].find(k => k.includes('続きの説明'))!;
+    expect(nestedKey).toContain('手順を示す例:');
+    expect(v.get(nestedKey)).toEqual(['handoff']);
+  });
+
   test('marker を含むブロックが無ければ空', () => {
     expect(sharedSnippetVariants(new Map([['x', fence(['git status --short'])]]), marker).size).toBe(0);
   });
