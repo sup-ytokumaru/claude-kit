@@ -37,10 +37,15 @@
 3. 対象ブランチ上にいる場合、デフォルトブランチとの分岐点からの全変更を対象にする（複数コミットでも漏れない）:
 
 ```bash
+# 参照の存在を rev-parse で先に確認する（フック経由の git は存在しない参照でも exit 0 で空を返すことがあり、|| フォールバックが働かない）
 BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-git diff --name-only "origin/${BASE:-main}...HEAD" 2>/dev/null \
-  || git diff --name-only HEAD~1 HEAD 2>/dev/null \
-  || git diff --name-only
+if git rev-parse --verify -q "origin/${BASE:-main}" >/dev/null; then
+  git diff --name-only "origin/${BASE:-main}...HEAD"
+elif git rev-parse --verify -q HEAD~1 >/dev/null; then
+  git diff --name-only HEAD~1 HEAD
+else
+  git diff --name-only
+fi
 ```
 
 `HEAD~1` へのフォールバックが発動した場合は**直近1コミットしか見ていない**（「複数コミットでも漏れない」が成立していない）。縮退したことをレビュー報告の冒頭に明記し、可能なら `git fetch origin` 後に再実行する。
